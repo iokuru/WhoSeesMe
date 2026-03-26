@@ -1,6 +1,9 @@
 {
   "type": "module",
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
+    "better-sqlite3": "^12.8.0",
+    "dotenv": "^17.3.1",
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
     "plotly.js-dist": "^3.3.1"

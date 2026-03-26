@@ -275,32 +275,94 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   /* =========================
-     BACKEND LOCATION
+     SUPABASE INITIALIZATION
   ========================= */
+  const SUPABASE_URL = "https://vupfzmrchajjheeerfje.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_gLxSAgV7xQYJ0uCRjy3CVQ_yT3HEPoT";
+  const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  async function hashIp(ip) {
+    const msgUint8 = new TextEncoder().encode(ip);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /* =========================
+     LOCATION & LIVE TRACKING
+  ========================= */
+  const sessionId = Array.from({length: 16}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+  if (supabase) {
+    const room = supabase.channel('online-users');
+    
+    room.on('presence', { event: 'sync' }, () => {
+      const newState = room.presenceState();
+      let count = 0;
+      for (const key in newState) {
+        count += newState[key].length;
+      }
+      if (document.getElementById("onlineCounter")) {
+        document.getElementById("onlineCounter").textContent = Math.max(1, count);
+      }
+    });
+
+    room.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await room.track({
+          online_at: new Date().toISOString(),
+          session_id: sessionId
+        });
+      }
+    });
+  }
 
   try {
-    const res = await fetch("/api/info");
+    const res = await fetch("https://ipapi.co/json/");
     const d = await res.json();
 
-    set("ipaddress", d.ip || "Unknown");
+    const ip = d.ip || "Unknown";
+    set("ipaddress", ip);
     set("city", d.city || "Unknown");
     set("region", d.region || "Unknown");
-    set("country", d.country ? `${d.country} (${d.countryCode})` : "Unknown");
-    set("coordinates", d.lat && d.lon ? `${d.lat}, ${d.lon}` : "Unknown");
-    set("isp", d.isp || "Unknown");
+    set("country", d.country_name ? `${d.country_name} (${d.country_code})` : "Unknown");
+    set("coordinates", d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : "Unknown");
+    set("isp", d.org || "Unknown");
 
     let validLat = 40.7128;
     let validLon = -74.0060;
 
-    if (d.lat && d.lon && d.lat !== "Unknown") {
-      validLat = d.lat;
-      validLon = d.lon;
+    if (d.latitude && d.longitude && d.latitude !== "Unknown") {
+      validLat = parseFloat(d.latitude);
+      validLon = parseFloat(d.longitude);
+
+      if (supabase && ip !== "Unknown") {
+        const hashedId = await hashIp(ip);
+        supabase.from('locations').upsert({
+          id: hashedId,
+          lat: validLat,
+          lon: validLon,
+          last_seen: Date.now()
+        }).then(({ error }) => {
+          if (error) console.error("Supabase UPSERT Error:", error);
+        });
+      }
     }
 
-    initGlobe(validLat, validLon);
+    let allLocations = [];
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('locations').select('lat, lon');
+        if (!error && data) {
+          allLocations = data;
+        }
+      } catch(e) {}
+    }
+
+    initGlobe(validLat, validLon, allLocations);
   } catch (err) {
     // Fallback if network fails: New York City
-    initGlobe(40.7128, -74.0060);
+    initGlobe(40.7128, -74.0060, []);
   }
 
   /* =========================
@@ -476,7 +538,7 @@ content.appendChild(tipsBox);
 /* =========================
    GLOBE INITIALIZATION
 ========================= */
-function initGlobe(lat, lon) {
+function initGlobe(lat, lon, allLocations = []) {
     if (!window.Cesium) return;
     
     // Convert to numbers
@@ -596,28 +658,42 @@ function initGlobe(lat, lon) {
 
     const YELLOW = Cesium.Color.fromCssColorString('#FFE500');
 
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lon, lat),
-      point: {
-        pixelSize: 15,
-        color: YELLOW,
-        outlineColor: Cesium.Color.WHITE,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-      }
-    });
+    if (!allLocations || allLocations.length === 0) {
+      allLocations = [{ lat, lon }];
+    }
 
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lon, lat),
-      ellipse: {
-        semiMinorAxis: 50000,
-        semiMajorAxis: 50000,
-        material: Cesium.Color.fromCssColorString('#FFE500').withAlpha(0.3),
-        outline: true,
-        outlineColor: YELLOW,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-      },
+    allLocations.forEach(loc => {
+      const locLat = parseFloat(loc.lat);
+      const locLon = parseFloat(loc.lon);
+
+      if (isNaN(locLat) || isNaN(locLon)) return;
+
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(locLon, locLat),
+        point: {
+          pixelSize: 10,
+          color: YELLOW,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        }
+      });
+
+      // Show pulse/ellipse for current user location
+      if (Math.abs(locLat - lat) < 0.0001 && Math.abs(locLon - lon) < 0.0001) {
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(locLon, locLat),
+          ellipse: {
+            semiMinorAxis: 50000,
+            semiMajorAxis: 50000,
+            material: Cesium.Color.fromCssColorString('#FFE500').withAlpha(0.3),
+            outline: true,
+            outlineColor: YELLOW,
+            outlineWidth: 2,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+        });
+      }
     });
 
     viewer.camera.setView({
