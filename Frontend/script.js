@@ -288,7 +288,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     set("country", d.country ? `${d.country} (${d.countryCode})` : "Unknown");
     set("coordinates", d.lat && d.lon ? `${d.lat}, ${d.lon}` : "Unknown");
     set("isp", d.isp || "Unknown");
-  } catch {}
+
+    let validLat = 40.7128;
+    let validLon = -74.0060;
+
+    if (d.lat && d.lon && d.lat !== "Unknown") {
+      validLat = d.lat;
+      validLon = d.lon;
+    }
+
+    initGlobe(validLat, validLon);
+  } catch (err) {
+    // Fallback if network fails: New York City
+    initGlobe(40.7128, -74.0060);
+  }
 
   /* =========================
      STABLE MOUSE TRACKING
@@ -460,5 +473,156 @@ tipsBox.appendChild(tipsHeader);
 tipsBox.appendChild(tipsBody);
 content.appendChild(tipsBox);
 
+/* =========================
+   GLOBE INITIALIZATION
+========================= */
+function initGlobe(lat, lon) {
+    if (!window.Cesium) return;
+    
+    // Convert to numbers
+    lat = parseFloat(lat);
+    lon = parseFloat(lon);
+
+    Cesium.Ion.defaultAccessToken = '';
+
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      baseLayerPicker: false,
+      geocoder: false,
+      homeButton: false,
+      sceneModePicker: false,
+      navigationHelpButton: false,
+      animation: false,
+      timeline: false,
+      fullscreenButton: false,
+      vrButton: false,
+      infoBox: false,
+      selectionIndicator: false,
+      shadows: false,
+      shouldAnimate: true,
+    });
+
+    // Remove default imagery and add OSM exactly like yourinfo project
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.addImageryProvider(
+      new Cesium.OpenStreetMapImageryProvider({
+        url: 'https://tile.openstreetmap.org/',
+      })
+    );
+
+
+
+
+    const creditContainer = viewer.cesiumWidget.creditContainer;
+    if (creditContainer) creditContainer.style.display = 'none';
+
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#0b0b0b');
+    viewer.scene.globe.enableLighting = false;
+    viewer.scene.fog.enabled = false;
+    if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
+    if (viewer.scene.sun) viewer.scene.sun.show = false;
+    if (viewer.scene.moon) viewer.scene.moon.show = false;
+    if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
+    viewer.scene.globe.showGroundAtmosphere = false;
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a1a2e');
+    viewer.scene.globe.maximumScreenSpaceError = 1;
+
+    viewer.scene.screenSpaceCameraController.enableZoom = true;
+    viewer.scene.screenSpaceCameraController.enableRotate = true;
+    viewer.scene.screenSpaceCameraController.enableTilt = true;
+    viewer.scene.screenSpaceCameraController.enableLook = true;
+    
+    viewer.scene.screenSpaceCameraController.zoomEventTypes = [
+      Cesium.CameraEventType.WHEEL,
+      Cesium.CameraEventType.PINCH,
+    ];
+    viewer.scene.screenSpaceCameraController.tiltEventTypes = [
+      Cesium.CameraEventType.PINCH,
+      Cesium.CameraEventType.RIGHT_DRAG,
+    ];
+
+    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1000;
+    viewer.scene.screenSpaceCameraController.maximumZoomDistance = 50000000;
+    viewer.scene.screenSpaceCameraController.zoomFactor = 10;
+    
+    const handleWheel = (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const zoomAmount = -e.deltaY * 0.01;
+        const camera = viewer.camera;
+        const cameraHeight = camera.positionCartographic.height;
+        const zoomFactor = cameraHeight * zoomAmount * 0.5;
+        camera.zoomIn(zoomFactor);
+      }
+    };
+    viewer.canvas.addEventListener('wheel', handleWheel, { passive: false });
+
+    let lastTime = Date.now();
+    let isUserInteracting = false;
+    let resumeTimeout = null;
+
+    const rotate = () => {
+      if (isUserInteracting) return;
+      const now = Date.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+      viewer.scene.camera.rotate(Cesium.Cartesian3.UNIT_Z, delta * 0.05);
+    };
+
+    viewer.clock.onTick.addEventListener(rotate);
+
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    const pauseRotation = () => {
+      isUserInteracting = true;
+      lastTime = Date.now();
+      if (resumeTimeout) clearTimeout(resumeTimeout);
+    };
+
+    const scheduleResumeRotation = () => {
+      if (resumeTimeout) clearTimeout(resumeTimeout);
+      resumeTimeout = setTimeout(() => {
+        isUserInteracting = false;
+        lastTime = Date.now();
+      }, 3000);
+    };
+
+    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.RIGHT_DOWN);
+    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.MIDDLE_DOWN);
+    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.WHEEL);
+
+    handler.setInputAction(scheduleResumeRotation, Cesium.ScreenSpaceEventType.LEFT_UP);
+    handler.setInputAction(scheduleResumeRotation, Cesium.ScreenSpaceEventType.RIGHT_UP);
+    handler.setInputAction(scheduleResumeRotation, Cesium.ScreenSpaceEventType.MIDDLE_UP);
+
+    const YELLOW = Cesium.Color.fromCssColorString('#FFE500');
+
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat),
+      point: {
+        pixelSize: 15,
+        color: YELLOW,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      }
+    });
+
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat),
+      ellipse: {
+        semiMinorAxis: 50000,
+        semiMajorAxis: 50000,
+        material: Cesium.Color.fromCssColorString('#FFE500').withAlpha(0.3),
+        outline: true,
+        outlineColor: YELLOW,
+        outlineWidth: 2,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      },
+    });
+
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, 20000000),
+    });
+}
 
 });
