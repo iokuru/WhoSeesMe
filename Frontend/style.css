@@ -1,0 +1,348 @@
+
+
+body {
+  margin: 0;
+  background: #0b0b0b;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #eaeaea;
+  overflow: hidden;
+}
+
+/* ================= LEFT PANEL ================= */
+
+.left-panel {
+  width: 300px;
+  height: 100vh;
+  background: linear-gradient(#0f1116, #090a0d);
+  padding: 16px;
+  box-sizing: border-box;
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+.left-header {
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #9aa0a6;
+  margin-top: 4px;
+}
+
+.auction-status {
+  text-align: center;
+  padding: 20px 10px;
+  border: 1px solid #222;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.alert-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #ff4d4d;
+  color: #ff4d4d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px;
+  font-weight: 700;
+}
+
+.status-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status-subtitle {
+  font-size: 12px;
+  color: #9aa0a6;
+  margin-top: 4px;
+}
+
+.primary-btn {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #2a0f14, #16090c);
+  border: 1px solid #7a1c28;
+  color: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+/* ================= PROFILES ================= */
+
+.profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #12141a;
+  border: 1px solid #1f222a;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.profile:hover {
+  border-color: #2ddf72;
+}
+
+.profile-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile-desc {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #9aa0a6;
+}
+
+.arrow {
+  color: #2ddf72;
+  font-size: 14px;
+  align-self: center;
+}
+
+.profile.highlight {
+  border-color: #2ddf72;
+}
+
+/* ================= MIDDLE PANEL ================= */
+
+.middle-wrapper {
+  position: fixed;
+  top: 0;
+  left: 300px;
+  right: 360px;
+  bottom: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.middle-top {
+  height: 52px;
+  background: #000;
+  border-bottom: 3px solid #ffe600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.brand {
+  color: #ffe600;
+  font-weight: 900;
+  letter-spacing: 1px;
+  font-size: 18px;
+}
+
+.stats {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stat {
+  background: #ffe600;
+  color: #000;
+  padding: 6px 10px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.stat-value {
+  font-size: 14px;
+}
+
+.stat-label {
+  font-size: 10px;
+}
+
+.stat.live {
+  background: #000;
+  color: #ffe600;
+  border: 2px solid #ffe600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background: #ffe600;
+  border-radius: 50%;
+}
+
+.middle-content {
+  flex: 1;
+  background: #ffffff;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+.middle-bottom {
+  height: 48px;
+  background: #000;
+  border-top: 3px solid #ffe600;
+  color: #ccc;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.middle-bottom .link {
+  color: #ffe600;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ================= RIGHT PANEL ================= */
+
+.right-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100vh;
+  background: #000;
+  border-left: 4px solid #ffe600;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.right-header {
+  position: sticky;
+  top: 0;
+  background: #000;
+  color: #fff;
+  font-weight: 800;
+  padding: 14px;
+  border-bottom: 3px solid #ffe600;
+  z-index: 10;
+}
+
+/* ================= SECTION BOX ================= */
+
+.section {
+  border: 2px solid #ffe600;
+  margin: 14px;
+  background: #000;
+}
+
+.section-title {
+  background: #ffe600;
+  color: #000;
+  font-weight: 800;
+  padding: 8px 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ================= ROWS ================= */
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-top: 1px solid #222;
+  font-size: 13px;
+}
+
+.row span:first-child {
+  color: #aaa;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.row span:last-child {
+  color: #ffe600;
+  font-weight: 700;
+  text-align: right;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ================= SCROLLBAR ================= */
+
+.right-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.right-panel::-webkit-scrollbar-thumb {
+  background: #ffe600;
+}
+
+.right-panel::-webkit-scrollbar-track {
+  background: #111;
+}
+/* Privacy Wrapper */
+.privacy-wrapper {
+  border: 2px solid #ffe600;
+  background: #ffe600;
+  margin: 14px;
+}
+
+/* Inner White Panel */
+.privacy-card {
+  position: relative;
+  background: #ffe600;
+  padding: 18px 20px;
+  color: #000;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Bullet Styling */
+.privacy-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.privacy-card li {
+  margin-bottom: 10px;
+}
+
+/* Floating !! badge */
+.privacy-badge {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  background: #ffffff;
+  border: 2px solid #000;
+  padding: 4px 8px;
+  font-weight: 900;
+  font-size: 14px;
+  transform: rotate(8deg);
+}

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WhoSeesMe</title>
+  <meta name="description" content="Discover what information websites can collect about you. A privacy awareness tool showing your IP, location, device fingerprints, and more.">
+
+  <link rel="stylesheet" href="style.css">
+
+
+
+</head>
+<body>
+
+<div class="left-panel">
+
+  <button class="primary-btn">
+    See Your Real Ad Profiles
+  </button>
+
+  <div class="profiles">
+
+    <a
+      class="profile"
+      href="https://adssettings.google.com/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <div class="profile-name">Google</div>
+      <div class="profile-desc">See the interests Google thinks you have</div>
+      <div class="arrow">→</div>
+  </a>
+
+    <a
+  class="profile"
+  href="https://www.facebook.com/ads/preferences/"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">Facebook Meta</div>
+      <div class="profile-desc">View your ad interests and advertisers</div>
+      <div class="arrow">→</div>
+</a>
+
+    <a
+  class="profile"
+  href="https://twitter.com/settings/your_twitter_data/twitter_interests"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">X Twitter</div>
+      <div class="profile-desc">See topics X thinks you are interested in</div>
+      <div class="arrow">→</div>
+</a>
+
+    <a
+  class="profile"
+  href="https://account.microsoft.com/privacy/ad-settings"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">Microsoft</div>
+      <div class="profile-desc">Manage Microsoft advertising preferences</div>
+      <div class="arrow">→</div>
+</a>
+
+    <a
+  class="profile"
+  href="https://www.amazon.com/adprefs"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">Amazon</div>
+      <div class="profile-desc">View Amazon ad preferences</div>
+      <div class="arrow">→</div>
+</a>
+
+    <a
+  class="profile"
+  href="https://www.linkedin.com/psettings/advertising"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">LinkedIn</div>
+      <div class="profile-desc">See how LinkedIn categorizes you</div>
+      <div class="arrow">→</div>
+</a>
+
+
+    <a
+  class="profile"
+  href="https://www.reddit.com/settings/privacy"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">Reddit</div>
+      <div class="profile-desc">Manage Reddit ad preferences</div>
+      <div class="arrow">→</div>
+</a>
+
+    <a
+  class="profile"
+  href="https://legal.yahoo.com/us/en/yahoo/privacy/adinfo/index.html"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+      <div class="profile-name">Yahoo</div>
+      <div class="profile-desc">Yahoo AOL ad preferences</div>
+      <div class="arrow">→</div>
+</a>
+
+</div>
+
+</div>
+
+<!-- MIDDLE SECTION -->
+<div class="middle-wrapper">
+
+  <div class="middle-top">
+    <div class="brand">!? WHOSEESME</div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="sessionTime">00:00</div>
+        <div class="stat-label">SESSION TIME</div>
+      </div>
+
+      <div class="stat"> 
+    <div class="stat-value">1</div>
+    <div class="stat-label">ONLINE</div>
+    </div>
+    
+      <div class="stat live">
+        <div class="dot"></div>
+        LIVE
+      </div>
+    </div>
+
+    
+  </div>
+
+  <div class="middle-content">
+    <!-- globe -->
+  </div>
+
+  <div class="middle-bottom">
+    THIS SITE DEMONSTRATES WHAT INFORMATION WEBSITES CAN COLLECT ABOUT YOU.
+  </div>
+
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="right-panel">
+  <div class="right-header">
+    YOUR INFORMATION
+  </div>
+
+  <div id="content"></div>
+</div>
+
+
+<script src="script.js"></script>
+</body>
+</html>
