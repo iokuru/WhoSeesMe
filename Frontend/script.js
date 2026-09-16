@@ -1,123 +1,97 @@
 document.addEventListener("DOMContentLoaded", async () => {
+  const byId = (id) => document.getElementById(id);
+  const setText = (id, val) => {
+    const el = byId(id);
+    if (el) el.textContent = val;
+  };
 
-  /* =========================
-     UTILITY
-  ========================= */
-
-  function hash(str) {
-    let h = 0;
+  const toHexHash = (str) => {
+    let hash = 0;
     for (let i = 0; i < str.length; i++) {
-      h = (h << 5) - h + str.charCodeAt(i);
-      h |= 0;
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
     }
-    return Math.abs(h).toString(16);
-  }
+    return Math.abs(hash).toString(16).padStart(8, "0").slice(0, 8);
+  };
 
-  function yesNo(v) {
-    return v ? "Yes" : "No";
-  }
+  // Canvas fingerprint
+  const getCanvasHash = () => {
+    const cvs = document.createElement("canvas");
+    const ctx = cvs.getContext("2d");
+    if (!ctx) return "unavailable";
 
-  function set(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  }
-
-  /* =========================
-     CANVAS FINGERPRINT
-  ========================= */
-
-  function getCanvasFingerprint() {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
+    cvs.width = 120;
+    cvs.height = 30;
     ctx.textBaseline = "top";
-    ctx.font = "16px Arial";
-    ctx.fillStyle = "#f60";
-    ctx.fillRect(10, 10, 100, 40);
-    ctx.fillStyle = "#069";
-    ctx.fillText("fingerprint", 12, 20);
+    ctx.font = "14px monospace";
+    ctx.fillStyle = "#ff6600";
+    ctx.fillRect(4, 4, 90, 22);
+    ctx.fillStyle = "#006699";
+    ctx.fillText("fp_probe", 6, 8);
+    return toHexHash(cvs.toDataURL());
+  };
 
-    return hash(canvas.toDataURL()).slice(0, 8);
-  }
-
-  /* =========================
-     WEBGL INFO
-  ========================= */
-
-  let webglVendor = "Unavailable";
-  let webglRenderer = "Unavailable";
-  let webglVersion = "Unavailable";
-  let webglExtensions = "0";
+  // WebGL hardware probe
+  let glVendor = "Unavailable";
+  let glRenderer = "Unavailable";
+  let glVer = "Unavailable";
+  let extCount = 0;
 
   try {
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl");
-
+    const cvs = document.createElement("canvas");
+    const gl = cvs.getContext("webgl") || cvs.getContext("experimental-webgl");
     if (gl) {
       const dbg = gl.getExtension("WEBGL_debug_renderer_info");
       if (dbg) {
-        webglVendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
-        webglRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+        glVendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+        glRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
       }
-
-      webglVersion = gl.getParameter(gl.VERSION);
-      webglExtensions = gl.getSupportedExtensions().length;
+      glVer = gl.getParameter(gl.VERSION) || "Unavailable";
+      extCount = (gl.getSupportedExtensions() || []).length;
     }
   } catch {}
 
-  /* =========================
-     UNIQUE IDS
-  ========================= */
+  // IDs & platform traits
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown";
 
-  const browserFingerprint =
-    "fp_" +
-    hash(
-      navigator.userAgent +
-      screen.width +
-      screen.height +
-      screen.colorDepth +
-      navigator.language +
-      navigator.platform
-    ).slice(0, 8);
+  const fp = `fp_${toHexHash(
+    [
+      navigator.userAgent,
+      screen.width,
+      screen.height,
+      screen.colorDepth,
+      navigator.language,
+      navigator.platform,
+    ].join("|")
+  )}`;
 
-  const environmentId =
-    "env_" +
-    hash(
-      navigator.hardwareConcurrency +
-      navigator.deviceMemory +
-      Intl.DateTimeFormat().resolvedOptions().timeZone
-    ).slice(0, 8);
+  const envId = `env_${toHexHash(
+    [navigator.hardwareConcurrency, navigator.deviceMemory, tz].join("|")
+  )}`;
 
-  const connection =
-    navigator.connection ||
-    navigator.mozConnection ||
-    navigator.webkitConnection;
-
-  /* =========================
-     SECTIONS
-  ========================= */
-
+  // Spec layout
   const sections = [
     {
       title: "YOUR UNIQUE IDS",
       rows: {
-        "Browser Fingerprint": browserFingerprint,
-        "Environment ID": environmentId,
-        "Canvas Hash": getCanvasFingerprint(),
-        "Consistency Confidence": "Local only"
-      }
+        "Browser Fingerprint": fp,
+        "Environment ID": envId,
+        "Canvas Hash": getCanvasHash(),
+        "Consistency Confidence": "Local only",
+      },
     },
     {
       title: "LOCATION",
       rows: {
-        "IP Address": "Loading...",
-        "City": "Loading...",
-        "Region": "Loading...",
-        "Country": "Loading...",
-        "Coordinates": "Loading...",
-        "Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
-        "ISP": "Loading..."
-      }
+        "IP Address": "Resolving...",
+        City: "Resolving...",
+        Region: "Resolving...",
+        Country: "Resolving...",
+        Coordinates: "Resolving...",
+        Timezone: tz,
+        ISP: "Resolving...",
+      },
     },
     {
       title: "DEVICE SPECIFICATIONS",
@@ -125,427 +99,348 @@ document.addEventListener("DOMContentLoaded", async () => {
         "Screen Resolution": `${screen.width}x${screen.height}`,
         "Window Size": `${window.innerWidth}x${window.innerHeight}`,
         "Color Depth": `${screen.colorDepth}-bit`,
-        "Pixel Ratio": `${devicePixelRatio}x`,
-        "CPU Cores": navigator.hardwareConcurrency || "N/A",
-        "RAM Estimate": navigator.deviceMemory
-          ? navigator.deviceMemory + " GB"
-          : "N/A",
-        "Platform": navigator.platform,
-        "Language": navigator.language
-      }
+        "Pixel Ratio": `${window.devicePixelRatio || 1}x`,
+        "CPU Cores": navigator.hardwareConcurrency ?? "N/A",
+        "RAM Estimate": navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "N/A",
+        Platform: navigator.platform || "Unknown",
+        Language: navigator.language,
+      },
     },
     {
       title: "NETWORK",
       rows: {
-        "Connection Type": connection?.effectiveType || "Unknown",
-        "Downlink": connection?.downlink
-          ? connection.downlink + " Mbps"
-          : "Unknown",
-        "RTT": connection?.rtt ? connection.rtt + " ms" : "Unknown",
-        "Data Saver": connection?.saveData ? "Enabled" : "Disabled"
-      }
+        "Connection Type": conn?.effectiveType || "Unknown",
+        Downlink: conn?.downlink ? `${conn.downlink} Mbps` : "Unknown",
+        RTT: conn?.rtt ? `${conn.rtt} ms` : "Unknown",
+        "Data Saver": conn?.saveData ? "Enabled" : "Disabled",
+      },
     },
     {
       title: "BROWSER",
       rows: {
         "User Agent": navigator.userAgent,
-        "Languages": navigator.languages?.join(", ") || navigator.language,
+        Languages: navigator.languages?.join(", ") || navigator.language,
         "History Length": history.length,
         "Do Not Track": navigator.doNotTrack === "1" ? "Yes" : "No",
         "Global Privacy Control": navigator.globalPrivacyControl ? "Yes" : "No",
-        "Cookies Enabled": yesNo(navigator.cookieEnabled),
-        "LocalStorage": yesNo(!!window.localStorage),
-        "SessionStorage": yesNo(!!window.sessionStorage),
-        "IndexedDB": yesNo(!!window.indexedDB)
-      }
+        "Cookies Enabled": navigator.cookieEnabled ? "Yes" : "No",
+        LocalStorage: window.localStorage ? "Yes" : "No",
+        SessionStorage: window.sessionStorage ? "Yes" : "No",
+        IndexedDB: window.indexedDB ? "Yes" : "No",
+      },
     },
     {
       title: "WEB APIS",
       rows: {
-        "Service Worker": yesNo("serviceWorker" in navigator),
-        "Web Worker": yesNo(!!window.Worker),
-        "WebAssembly": yesNo(!!window.WebAssembly),
-        "WebSocket": yesNo(!!window.WebSocket),
-        "WebRTC": yesNo(!!window.RTCPeerConnection),
-        "Notifications": yesNo("Notification" in window),
-        "Push API": yesNo("PushManager" in window),
-        "Clipboard API": yesNo(!!navigator.clipboard)
-      }
+        "Service Worker": "serviceWorker" in navigator ? "Yes" : "No",
+        "Web Worker": typeof Worker !== "undefined" ? "Yes" : "No",
+        WebAssembly: typeof WebAssembly !== "undefined" ? "Yes" : "No",
+        WebSocket: typeof WebSocket !== "undefined" ? "Yes" : "No",
+        WebRTC: typeof RTCPeerConnection !== "undefined" ? "Yes" : "No",
+        Notifications: typeof Notification !== "undefined" ? "Yes" : "No",
+        "Push API": "PushManager" in window ? "Yes" : "No",
+        "Clipboard API": !!navigator.clipboard ? "Yes" : "No",
+      },
     },
     {
       title: "HARDWARE",
       rows: {
-        "WebGL Vendor": webglVendor,
-        "WebGL Renderer": webglRenderer,
-        "WebGL Version": webglVersion,
-        "WebGL Extensions Count": webglExtensions
-      }
+        "WebGL Vendor": glVendor,
+        "WebGL Renderer": glRenderer,
+        "WebGL Version": glVer,
+        "WebGL Extensions Count": extCount,
+      },
     },
     {
       title: "JS MEMORY",
       rows: {
         "Heap Limit": performance.memory
-          ? Math.round(performance.memory.jsHeapSizeLimit / 1048576) + " MB"
+          ? `${Math.round(performance.memory.jsHeapSizeLimit / 1048576)} MB`
           : "Unavailable",
         "Used Heap": performance.memory
-          ? Math.round(performance.memory.usedJSHeapSize / 1048576) + " MB"
-          : "Unavailable"
-      }
+          ? `${Math.round(performance.memory.usedJSHeapSize / 1048576)} MB`
+          : "Unavailable",
+      },
     },
     {
       title: "STORAGE",
       rows: {
-        "Used": "Loading...",
-        "Quota": "Loading..."
-      }
+        Used: "Calculating...",
+        Quota: "Calculating...",
+      },
     },
     {
       title: "MEDIA DEVICES",
       rows: {
-        "Microphones": "Loading...",
-        "Cameras": "Loading...",
-        "Speakers": "Loading..."
-      }
+        Microphones: "Scanning...",
+        Cameras: "Scanning...",
+        Speakers: "Scanning...",
+      },
     },
     {
       title: "MOUSE BEHAVIOR",
       rows: {
-        "Speed": "0 px/s",
-        "Acceleration": "0",
-        "Movements": "0",
-        "Distance": "0 px",
+        Speed: "0 px/s",
+        Acceleration: "0",
+        Movements: "0",
+        Distance: "0 px",
         "Idle Time": "0s",
-        "Clicks": "0",
-        "Click Interval": "0ms"
-      }
-    }
+        Clicks: "0",
+        "Click Interval": "0ms",
+      },
+    },
   ];
 
-  const content = document.getElementById("content");
-  content.innerHTML = "";
+  // Render spec DOM
+  const container = byId("content");
+  if (container) {
+    container.innerHTML = "";
+    const fragment = document.createDocumentFragment();
 
-  sections.forEach(section => {
-    const box = document.createElement("div");
-    box.className = "section";
+    sections.forEach(({ title, rows }) => {
+      const card = document.createElement("div");
+      card.className = "section";
 
-    const header = document.createElement("div");
-    header.className = "section-title";
-    header.textContent = section.title;
-    box.appendChild(header);
+      const heading = document.createElement("div");
+      heading.className = "section-title";
+      heading.textContent = title;
+      card.appendChild(heading);
 
-    Object.entries(section.rows).forEach(([label, value]) => {
-      const row = document.createElement("div");
-      row.className = "row";
+      Object.entries(rows).forEach(([key, val]) => {
+        const row = document.createElement("div");
+        row.className = "row";
 
-      const key = document.createElement("span");
-      key.textContent = label;
+        const labelSpan = document.createElement("span");
+        labelSpan.textContent = key;
 
-      const val = document.createElement("span");
-      val.textContent = value;
-      val.id = label.toLowerCase().replace(/[^a-z]/g, "");
+        const valSpan = document.createElement("span");
+        valSpan.textContent = val;
+        valSpan.id = key.toLowerCase().replace(/[^a-z]/g, "");
 
-      row.appendChild(key);
-      row.appendChild(val);
-      box.appendChild(row);
+        row.appendChild(labelSpan);
+        row.appendChild(valSpan);
+        card.appendChild(row);
+      });
+
+      fragment.appendChild(card);
     });
 
-    content.appendChild(box);
-  });
+    container.appendChild(fragment);
+  }
 
-  /* =========================
-     STORAGE ESTIMATE
-  ========================= */
-
+  // Storage quota inspection
   if (navigator.storage?.estimate) {
-    const estimate = await navigator.storage.estimate();
-    set("used", (estimate.usage / 1048576).toFixed(2) + " MB");
-    set("quota", (estimate.quota / 1048576).toFixed(2) + " MB");
+    try {
+      const { usage, quota } = await navigator.storage.estimate();
+      setText("used", `${(usage / 1048576).toFixed(2)} MB`);
+      setText("quota", `${(quota / 1048576).toFixed(2)} MB`);
+    } catch {
+      setText("used", "Unavailable");
+      setText("quota", "Unavailable");
+    }
   }
 
-  /* =========================
-     MEDIA DEVICES
-  ========================= */
-
+  // Hardware enumerate
   if (navigator.mediaDevices?.enumerateDevices) {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-
-    set("microphones", devices.filter(d => d.kind === "audioinput").length);
-    set("cameras", devices.filter(d => d.kind === "videoinput").length);
-    set("speakers", devices.filter(d => d.kind === "audiooutput").length);
+    try {
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      setText("microphones", devs.filter((d) => d.kind === "audioinput").length);
+      setText("cameras", devs.filter((d) => d.kind === "videoinput").length);
+      setText("speakers", devs.filter((d) => d.kind === "audiooutput").length);
+    } catch {
+      setText("microphones", "Denied");
+      setText("cameras", "Denied");
+      setText("speakers", "Denied");
+    }
   }
 
-  /* =========================
-     SUPABASE INITIALIZATION
-  ========================= */
-  const SUPABASE_URL = "https://vupfzmrchajjheeerfje.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_gLxSAgV7xQYJ0uCRjy3CVQ_yT3HEPoT";
-  const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+  // Active session tracking & presence
+  const sessionId = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
-  async function hashIp(ip) {
-    const msgUint8 = new TextEncoder().encode(ip);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  /* =========================
-     LOCATION & LIVE TRACKING
-  ========================= */
-  const sessionId = Array.from({length: 16}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-
-  if (supabase) {
-    const room = supabase.channel('online-users');
-    
-    room.on('presence', { event: 'sync' }, () => {
-      const newState = room.presenceState();
-      let count = 0;
-      for (const key in newState) {
-        count += newState[key].length;
+  const pingPresence = async () => {
+    try {
+      const res = await fetch("/api/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (res.ok) {
+        const { activeUsers } = await res.json();
+        setText("onlineCounter", activeUsers ?? 1);
       }
-      if (document.getElementById("onlineCounter")) {
-        document.getElementById("onlineCounter").textContent = Math.max(1, count);
-      }
-    });
+    } catch {}
+  };
 
-    room.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await room.track({
-          online_at: new Date().toISOString(),
-          session_id: sessionId
-        });
-      }
-    });
-  }
+  pingPresence();
+  setInterval(pingPresence, 8000);
 
+  // Endpoint telemetry & map rendering
   try {
-    const res = await fetch("https://ipapi.co/json/");
-    const d = await res.json();
+    const res = await fetch("/api/info");
+    const info = await res.json();
 
-    const ip = d.ip || "Unknown";
-    set("ipaddress", ip);
-    set("city", d.city || "Unknown");
-    set("region", d.region || "Unknown");
-    set("country", d.country_name ? `${d.country_name} (${d.country_code})` : "Unknown");
-    set("coordinates", d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : "Unknown");
-    set("isp", d.org || "Unknown");
+    setText("ipaddress", info.ip || "Unavailable");
+    setText("city", info.city || "Unknown");
+    setText("region", info.region || "Unknown");
+    setText("country", info.countryCode ? `${info.country} (${info.countryCode})` : info.country || "Unknown");
+    setText("isp", info.isp || "Unknown");
 
-    let validLat = 40.7128;
-    let validLon = -74.0060;
+    const hasCoords = info.lat != null && info.lon != null && info.lat !== "Unknown";
+    setText("coordinates", hasCoords ? `${info.lat}, ${info.lon}` : "Unknown");
 
-    if (d.latitude && d.longitude && d.latitude !== "Unknown") {
-      validLat = parseFloat(d.latitude);
-      validLon = parseFloat(d.longitude);
+    const curLat = hasCoords ? Number(info.lat) : 40.7128;
+    const curLon = hasCoords ? Number(info.lon) : -74.006;
 
-      if (supabase && ip !== "Unknown") {
-        const hashedId = await hashIp(ip);
-        supabase.from('locations').upsert({
-          id: hashedId,
-          lat: validLat,
-          lon: validLon,
-          last_seen: Date.now()
-        }).then(({ error }) => {
-          if (error) console.error("Supabase UPSERT Error:", error);
-        });
-      }
-    }
+    let points = [];
+    try {
+      const locRes = await fetch("/api/locations");
+      if (locRes.ok) points = await locRes.json();
+    } catch {}
 
-    let allLocations = [];
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('locations').select('lat, lon');
-        if (!error && data) {
-          allLocations = data;
-        }
-      } catch(e) {}
-    }
-
-    initGlobe(validLat, validLon, allLocations);
-  } catch (err) {
-    // Fallback if network fails: New York City
-    initGlobe(40.7128, -74.0060, []);
+    initGlobe(curLat, curLon, points);
+  } catch {
+    initGlobe(40.7128, -74.006, []);
   }
 
-  /* =========================
-     STABLE MOUSE TRACKING
-  ========================= */
-
-  let lastX = null;
-  let lastY = null;
-  let lastTime = performance.now();
-
-  let totalDistance = 0;
-  let movements = 0;
-  let clicks = 0;
-  let lastClickTime = 0;
-
-  let speedSamples = [];
-  const MAX_SAMPLES = 6;
+  // Pointer dynamics
+  let prevX = null;
+  let prevY = null;
+  let prevTime = performance.now();
+  let totalDist = 0;
+  let moveEvents = 0;
+  let clickCount = 0;
+  let lastClick = 0;
   let lastSpeed = 0;
-  let lastMoveTime = performance.now();
+  let lastActivity = performance.now();
+  const speedSamples = [];
 
-  document.addEventListener("mousemove", e => {
+  document.addEventListener("mousemove", (e) => {
     const now = performance.now();
+    if (prevX !== null) {
+      const dt = (now - prevTime) / 1000;
+      if (dt > 0.015) {
+        const dx = e.clientX - prevX;
+        const dy = e.clientY - prevY;
+        const dist = Math.hypot(dx, dy);
+        const speed = dist / dt;
 
-    if (lastX !== null) {
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      const dt = (now - lastTime) / 1000;
-
-      if (dt > 0.01) {
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const speed = distance / dt;
-
-        totalDistance += distance;
-        movements++;
+        totalDist += dist;
+        moveEvents++;
 
         speedSamples.push(speed);
-        if (speedSamples.length > MAX_SAMPLES) speedSamples.shift();
+        if (speedSamples.length > 5) speedSamples.shift();
 
-        const avgSpeed =
-          speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length;
-
-        const acceleration = -(avgSpeed - lastSpeed) / dt;
+        const avgSpeed = speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length;
+        const accel = (avgSpeed - lastSpeed) / dt;
         lastSpeed = avgSpeed;
 
-        set("speed", avgSpeed.toFixed(2) + " px/s");
-        set("acceleration", acceleration.toFixed(2));
-        set("movements", movements);
-        set("distance", Math.round(totalDistance) + " px");
+        setText("speed", `${avgSpeed.toFixed(1)} px/s`);
+        setText("acceleration", accel.toFixed(1));
+        setText("movements", moveEvents);
+        setText("distance", `${Math.round(totalDist)} px`);
       }
     }
-
-    lastX = e.clientX;
-    lastY = e.clientY;
-    lastTime = now;
-    lastMoveTime = now;
+    prevX = e.clientX;
+    prevY = e.clientY;
+    prevTime = now;
+    lastActivity = now;
   });
 
   document.addEventListener("click", () => {
-    clicks++;
-    set("clicks", clicks);
+    clickCount++;
+    setText("clicks", clickCount);
 
     const now = performance.now();
-    if (lastClickTime) {
-      set("clickinterval", Math.round(now - lastClickTime) + "ms");
+    if (lastClick) {
+      setText("clickinterval", `${Math.round(now - lastClick)}ms`);
     }
-    lastClickTime = now;
+    lastClick = now;
   });
 
   setInterval(() => {
-    const idle = Math.floor((performance.now() - lastMoveTime) / 1000);
-    set("idletime", idle + "s");
+    const idleSec = Math.floor((performance.now() - lastActivity) / 1000);
+    setText("idletime", `${idleSec}s`);
   }, 1000);
 
-  /* =========================
-   SESSION TIMER
-========================= */
-
-const sessionStart = Date.now();
-const sessionEl = document.getElementById("sessionTime");
-
-if (sessionEl) {
+  // Session duration
+  const startTs = Date.now();
   setInterval(() => {
-    const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
-
-    const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
-    const seconds = String(elapsed % 60).padStart(2, "0");
-
-    sessionEl.textContent = minutes + ":" + seconds;
+    const elapsed = Math.floor((Date.now() - startTs) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const s = String(elapsed % 60).padStart(2, "0");
+    setText("sessionTime", `${m}:${s}`);
   }, 1000);
-}
 
-/* =========================
-   COPY / PASTE TRACKING
-========================= */
+  // Interaction logs
+  let copyOps = 0;
+  let pasteOps = 0;
+  let ctxMenuClicks = 0;
+  let screenshotHits = 0;
+  let selCount = 0;
 
-let textSelections = 0;
-let copyCount = 0;
-let pasteCount = 0;
-let rightClicks = 0;
-let screenshotAttempts = 0;
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection().toString().trim();
+    if (sel) {
+      selCount++;
+      setText("textselections", selCount);
+      setText("lastselected", sel.slice(0, 50));
+    }
+  });
 
-document.addEventListener("selectionchange", () => {
-  const selection = window.getSelection().toString().trim();
-  if (selection.length > 0) {
-    textSelections++;
-    document.getElementById("textselections").textContent = textSelections;
-    document.getElementById("lastselected").textContent = selection.slice(0, 60);
+  document.addEventListener("copy", () => {
+    copyOps++;
+    setText("copies", copyOps);
+  });
+
+  document.addEventListener("paste", () => {
+    pasteOps++;
+    setText("pastes", pasteOps);
+  });
+
+  document.addEventListener("contextmenu", () => {
+    ctxMenuClicks++;
+    setText("rightclicks", ctxMenuClicks);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "PrintScreen") {
+      screenshotHits++;
+      setText("screenshotattempts", screenshotHits);
+    }
+    if (e.metaKey) setText("cmdmeta", "Used");
+    if (e.metaKey && e.shiftKey) setText("cmdshift", "Used");
+  });
+
+  // Append Privacy Advisory Card
+  if (container) {
+    const tipBlock = document.createElement("div");
+    tipBlock.className = "section privacy-wrapper";
+    tipBlock.innerHTML = `
+      <div class="section-title">PRIVACY TIPS</div>
+      <div class="privacy-card">
+        <div class="privacy-badge">!!</div>
+        <ul>
+          <li>Use a VPN to mask your IP address</li>
+          <li>Enable Do Not Track in your browser</li>
+          <li>Use privacy-focused browsers like Firefox or Brave</li>
+          <li>Consider using browser extensions to block fingerprinting</li>
+          <li>Disable WebRTC to prevent local IP leaks</li>
+          <li>Regularly clear cookies and browsing data</li>
+          <li>Use Tor Browser for maximum anonymity</li>
+          <li>Your mouse movements, typing patterns, and scroll behavior create a unique fingerprint</li>
+        </ul>
+      </div>
+    `;
+    container.appendChild(tipBlock);
   }
-});
 
-document.addEventListener("copy", () => {
-  copyCount++;
-  document.getElementById("copies").textContent = copyCount;
-});
-
-document.addEventListener("paste", () => {
-  pasteCount++;
-  document.getElementById("pastes").textContent = pasteCount;
-});
-
-document.addEventListener("contextmenu", () => {
-  rightClicks++;
-  document.getElementById("rightclicks").textContent = rightClicks;
-});
-
-document.addEventListener("keydown", e => {
-  if (e.key === "PrintScreen") {
-    screenshotAttempts++;
-    document.getElementById("screenshotattempts").textContent = screenshotAttempts;
-  }
-
-  if (e.metaKey) {
-    document.getElementById("cmdmeta").textContent = "Used";
-  }
-
-  if (e.metaKey && e.shiftKey) {
-    document.getElementById("cmdshift").textContent = "Used";
-  }
-});
-
-/* =========================
-   PRIVACY TIPS (EXACT MATCH)
-========================= */
-
-const tipsBox = document.createElement("div");
-tipsBox.className = "section privacy-wrapper";
-
-const tipsHeader = document.createElement("div");
-tipsHeader.className = "section-title";
-tipsHeader.textContent = "PRIVACY TIPS";
-
-const tipsBody = document.createElement("div");
-tipsBody.className = "privacy-card";
-
-tipsBody.innerHTML = `
-<div class="privacy-badge">!!</div>
-<ul>
-  <li>Use a VPN to mask your IP address</li>
-  <li>Enable Do Not Track in your browser</li>
-  <li>Use privacy-focused browsers like Firefox or Brave</li>
-  <li>Consider using browser extensions to block fingerprinting</li>
-  <li>Disable WebRTC to prevent local IP leaks</li>
-  <li>Regularly clear cookies and browsing data</li>
-  <li>Use Tor Browser for maximum anonymity</li>
-  <li>Your mouse movements, typing patterns, and scroll behavior create a unique fingerprint</li>
-</ul>
-`;
-
-tipsBox.appendChild(tipsHeader);
-tipsBox.appendChild(tipsBody);
-content.appendChild(tipsBox);
-
-/* =========================
-   GLOBE INITIALIZATION
-========================= */
-function initGlobe(lat, lon, allLocations = []) {
+  // Cesium runtime
+  function initGlobe(lat, lon, locations = []) {
     if (!window.Cesium) return;
-    
-    // Convert to numbers
-    lat = parseFloat(lat);
-    lon = parseFloat(lon);
 
-    Cesium.Ion.defaultAccessToken = '';
+    Cesium.Ion.defaultAccessToken = "";
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
       baseLayerPicker: false,
@@ -563,132 +458,121 @@ function initGlobe(lat, lon, allLocations = []) {
       shouldAnimate: true,
     });
 
-    // Remove default imagery and add OSM exactly like yourinfo project
     viewer.imageryLayers.removeAll();
     viewer.imageryLayers.addImageryProvider(
       new Cesium.OpenStreetMapImageryProvider({
-        url: 'https://tile.openstreetmap.org/',
+        url: "https://tile.openstreetmap.org/",
       })
     );
 
+    if (viewer.cesiumWidget.creditContainer) {
+      viewer.cesiumWidget.creditContainer.style.display = "none";
+    }
 
+    const { scene } = viewer;
+    scene.backgroundColor = Cesium.Color.fromCssColorString("#0b0b0b");
+    scene.globe.enableLighting = false;
+    scene.globe.fog.enabled = false;
+    if (scene.skyBox) scene.skyBox.show = false;
+    if (scene.sun) scene.sun.show = false;
+    if (scene.moon) scene.moon.show = false;
+    if (scene.skyAtmosphere) scene.skyAtmosphere.show = false;
+    scene.globe.showGroundAtmosphere = false;
+    scene.globe.baseColor = Cesium.Color.fromCssColorString("#1a1a2e");
+    scene.globe.maximumScreenSpaceError = 1;
 
+    const ctrl = scene.screenSpaceCameraController;
+    ctrl.enableZoom = true;
+    ctrl.enableRotate = true;
+    ctrl.enableTilt = true;
+    ctrl.enableLook = true;
+    ctrl.zoomEventTypes = [Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
+    ctrl.tiltEventTypes = [Cesium.CameraEventType.PINCH, Cesium.CameraEventType.RIGHT_DRAG];
+    ctrl.minimumZoomDistance = 1000;
+    ctrl.maximumZoomDistance = 50000000;
+    ctrl.zoomFactor = 10;
 
-    const creditContainer = viewer.cesiumWidget.creditContainer;
-    if (creditContainer) creditContainer.style.display = 'none';
+    viewer.canvas.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.ctrlKey) {
+          e.preventDefault();
+          const zoomAmount = -e.deltaY * 0.01;
+          const height = viewer.camera.positionCartographic.height;
+          viewer.camera.zoomIn(height * zoomAmount * 0.5);
+        }
+      },
+      { passive: false }
+    );
 
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#0b0b0b');
-    viewer.scene.globe.enableLighting = false;
-    viewer.scene.fog.enabled = false;
-    if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
-    if (viewer.scene.sun) viewer.scene.sun.show = false;
-    if (viewer.scene.moon) viewer.scene.moon.show = false;
-    if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
-    viewer.scene.globe.showGroundAtmosphere = false;
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a1a2e');
-    viewer.scene.globe.maximumScreenSpaceError = 1;
+    let lastTick = Date.now();
+    let userInteracting = false;
+    let resumeTimer = null;
 
-    viewer.scene.screenSpaceCameraController.enableZoom = true;
-    viewer.scene.screenSpaceCameraController.enableRotate = true;
-    viewer.scene.screenSpaceCameraController.enableTilt = true;
-    viewer.scene.screenSpaceCameraController.enableLook = true;
-    
-    viewer.scene.screenSpaceCameraController.zoomEventTypes = [
-      Cesium.CameraEventType.WHEEL,
-      Cesium.CameraEventType.PINCH,
-    ];
-    viewer.scene.screenSpaceCameraController.tiltEventTypes = [
-      Cesium.CameraEventType.PINCH,
-      Cesium.CameraEventType.RIGHT_DRAG,
-    ];
-
-    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1000;
-    viewer.scene.screenSpaceCameraController.maximumZoomDistance = 50000000;
-    viewer.scene.screenSpaceCameraController.zoomFactor = 10;
-    
-    const handleWheel = (e) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const zoomAmount = -e.deltaY * 0.01;
-        const camera = viewer.camera;
-        const cameraHeight = camera.positionCartographic.height;
-        const zoomFactor = cameraHeight * zoomAmount * 0.5;
-        camera.zoomIn(zoomFactor);
-      }
-    };
-    viewer.canvas.addEventListener('wheel', handleWheel, { passive: false });
-
-    let lastTime = Date.now();
-    let isUserInteracting = false;
-    let resumeTimeout = null;
-
-    const rotate = () => {
-      if (isUserInteracting) return;
+    viewer.clock.onTick.addEventListener(() => {
+      if (userInteracting) return;
       const now = Date.now();
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
-      viewer.scene.camera.rotate(Cesium.Cartesian3.UNIT_Z, delta * 0.05);
+      const dt = (now - lastTick) / 1000;
+      lastTick = now;
+      scene.camera.rotate(Cesium.Cartesian3.UNIT_Z, dt * 0.05);
+    });
+
+    const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+    const haltSpin = () => {
+      userInteracting = true;
+      lastTick = Date.now();
+      if (resumeTimer) clearTimeout(resumeTimer);
     };
 
-    viewer.clock.onTick.addEventListener(rotate);
-
-    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    const pauseRotation = () => {
-      isUserInteracting = true;
-      lastTime = Date.now();
-      if (resumeTimeout) clearTimeout(resumeTimeout);
-    };
-
-    const scheduleResumeRotation = () => {
-      if (resumeTimeout) clearTimeout(resumeTimeout);
-      resumeTimeout = setTimeout(() => {
-        isUserInteracting = false;
-        lastTime = Date.now();
+    const scheduleSpin = () => {
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
+        userInteracting = false;
+        lastTick = Date.now();
       }, 3000);
     };
 
-    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.RIGHT_DOWN);
-    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.MIDDLE_DOWN);
-    handler.setInputAction(pauseRotation, Cesium.ScreenSpaceEventType.WHEEL);
+    [
+      Cesium.ScreenSpaceEventType.LEFT_DOWN,
+      Cesium.ScreenSpaceEventType.RIGHT_DOWN,
+      Cesium.ScreenSpaceEventType.MIDDLE_DOWN,
+      Cesium.ScreenSpaceEventType.WHEEL,
+    ].forEach((ev) => handler.setInputAction(haltSpin, ev));
 
-    handler.setInputAction(scheduleResumeRotation, Cesium.ScreenSpaceEventType.LEFT_UP);
-    handler.setInputAction(scheduleResumeRotation, Cesium.ScreenSpaceEventType.RIGHT_UP);
-    handler.setInputAction(scheduleResumeRotation, Cesium.ScreenSpaceEventType.MIDDLE_UP);
+    [
+      Cesium.ScreenSpaceEventType.LEFT_UP,
+      Cesium.ScreenSpaceEventType.RIGHT_UP,
+      Cesium.ScreenSpaceEventType.MIDDLE_UP,
+    ].forEach((ev) => handler.setInputAction(scheduleSpin, ev));
 
-    const YELLOW = Cesium.Color.fromCssColorString('#FFE500');
+    const gold = Cesium.Color.fromCssColorString("#FFE500");
+    const pointsList = locations.length ? locations : [{ lat, lon }];
 
-    if (!allLocations || allLocations.length === 0) {
-      allLocations = [{ lat, lon }];
-    }
-
-    allLocations.forEach(loc => {
-      const locLat = parseFloat(loc.lat);
-      const locLon = parseFloat(loc.lon);
-
-      if (isNaN(locLat) || isNaN(locLon)) return;
+    pointsList.forEach((pt) => {
+      const pLat = Number(pt.lat);
+      const pLon = Number(pt.lon);
+      if (isNaN(pLat) || isNaN(pLon)) return;
 
       viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(locLon, locLat),
+        position: Cesium.Cartesian3.fromDegrees(pLon, pLat),
         point: {
           pixelSize: 10,
-          color: YELLOW,
+          color: gold,
           outlineColor: Cesium.Color.WHITE,
           outlineWidth: 1,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        }
+        },
       });
 
-      // Show pulse/ellipse for current user location
-      if (Math.abs(locLat - lat) < 0.0001 && Math.abs(locLon - lon) < 0.0001) {
+      if (Math.abs(pLat - lat) < 0.0001 && Math.abs(pLon - lon) < 0.0001) {
         viewer.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(locLon, locLat),
+          position: Cesium.Cartesian3.fromDegrees(pLon, pLat),
           ellipse: {
             semiMinorAxis: 50000,
             semiMajorAxis: 50000,
-            material: Cesium.Color.fromCssColorString('#FFE500').withAlpha(0.3),
+            material: gold.withAlpha(0.3),
             outline: true,
-            outlineColor: YELLOW,
+            outlineColor: gold,
             outlineWidth: 2,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
@@ -699,6 +583,5 @@ function initGlobe(lat, lon, allLocations = []) {
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, 20000000),
     });
-}
-
+  }
 });
