@@ -1,125 +1,119 @@
 import express from "express";
-import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import dotenv from "dotenv";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@libsql/client";
 
-// Load environment variables from .env file
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
 app.use(express.static(path.join(__dirname, "../Frontend")));
 app.use(express.json());
 
-// Initialize Supabase Client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL || "file:local.db",
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn("WARNING: Missing SUPABASE_URL or SUPABASE_KEY in .env file.");
-}
+await db.execute(`
+  CREATE TABLE IF NOT EXISTS locations (
+    id TEXT PRIMARY KEY,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    last_seen INTEGER NOT NULL
+  )
+`);
 
-const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseKey || 'placeholder'
-);
+const sessions = new Map();
+const TTL_MS = 15000;
 
-// Active users tracking (in-memory)
-// sessionId -> last seen timestamp
-const activeSessions = new Map();
+const getClientIp = (req) => {
+  const forwarded = req.headers["x-forwarded-for"];
+  const raw = forwarded ? forwarded.split(",")[0].trim() : req.socket.remoteAddress;
+  return raw === "::1" || raw === "127.0.0.1" ? "" : raw;
+};
 
-// Helper to hash IP for storage
-function hashIp(ip) {
-  return crypto.createHash('sha256').update(ip).digest('hex');
-}
+const hash = (str) => crypto.createHash("sha256").update(str).digest("hex");
 
 app.get("/api/info", async (req, res) => {
   try {
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress;
-    const cleanIp = ip === "::1" ? "" : ip;
-
-    const r = await fetch(cleanIp ? `https://ipapi.co/${cleanIp}/json/` : `https://ipapi.co/json/`);
-    const d = await r.json();
+    const ip = getClientIp(req);
+    const endpoint = ip ? `https://ipapi.co/${ip}/json/` : "https://ipapi.co/json/";
     
-    // Save to Supabase
-    if (d.latitude && d.longitude && d.latitude !== "Unknown") {
-      const hashedId = hashIp(cleanIp || "localhost");
+    const upstream = await fetch(endpoint, {
+      headers: { "User-Agent": "location-tracker/1.0" }
+    });
+
+    if (!upstream.ok) {
+      return res.status(502).json({ error: "GeoIP resolver unreachable" });
+    }
+
+    const data = await upstream.json();
+
+    if (data.latitude && data.longitude && !isNaN(data.latitude)) {
+      const id = hash(ip || "localhost");
       
-      const { error } = await supabase
-        .from('locations')
-        .upsert({ 
-          id: hashedId, 
-          lat: parseFloat(d.latitude), 
-          lon: parseFloat(d.longitude), 
-          last_seen: Date.now() 
-        });
-        
-      if (error) {
-        console.error("Supabase UPSERT Error:", error);
-      }
+      db.execute({
+        sql: `
+          INSERT INTO locations (id, lat, lon, last_seen)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            lat = excluded.lat,
+            lon = excluded.lon,
+            last_seen = excluded.last_seen
+        `,
+        args: [id, Number(data.latitude), Number(data.longitude), Date.now()],
+      }).catch((err) => console.error("[db] upsert failed:", err.message));
     }
 
     res.json({
-      ip: d.ip || cleanIp || "Unavailable",
-      city: d.city || "Unknown",
-      region: d.region || "Unknown",
-      country: d.country_name || "Unknown",
-      countryCode: d.country_code || "",
-      lat: d.latitude || "Unknown",
-      lon: d.longitude || "Unknown",
-      timezone: d.timezone || "Unknown",
-      isp: d.org || "Unknown",
-      org: d.org || "Unknown"
+      ip: data.ip || ip || "127.0.0.1",
+      city: data.city || "Unknown",
+      region: data.region || "Unknown",
+      country: data.country_name || "Unknown",
+      countryCode: data.country_code || "",
+      lat: data.latitude ?? null,
+      lon: data.longitude ?? null,
+      timezone: data.timezone || "UTC",
+      isp: data.org || "Unknown",
     });
   } catch (err) {
-    res.status(500).json({ error: "Lookup blocked" });
+    console.error("[api/info]", err.message);
+    res.status(500).json({ error: "Failed to resolve geolocation" });
   }
 });
 
-// Endpoint to fetch all locations for the globe
 app.get("/api/locations", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('locations')
-      .select('lat, lon');
-      
-    if (error) throw error;
-    res.json(data || []);
+    const { rows } = await db.execute("SELECT lat, lon FROM locations");
+    res.json(rows);
   } catch (err) {
-    console.error("Supabase GET Error:", err);
-    res.status(500).json({ error: "Database error" });
+    console.error("[api/locations]", err.message);
+    res.status(500).json({ error: "Internal error" });
   }
 });
 
-// Endpoint to track active online users
 app.post("/api/heartbeat", (req, res) => {
   const { sessionId } = req.body;
+  const now = Date.now();
+
   if (sessionId) {
-    activeSessions.set(sessionId, Date.now());
+    sessions.set(sessionId, now);
   }
-  
-  // Cleanup sessions older than 15 seconds
-  const cutoff = Date.now() - 15000;
-  let activeCount = 0;
-  for (const [sId, time] of activeSessions.entries()) {
-    if (time < cutoff) {
-      activeSessions.delete(sId);
-    } else {
-      activeCount++;
+
+  for (const [id, ts] of sessions.entries()) {
+    if (now - ts > TTL_MS) {
+      sessions.delete(id);
     }
   }
 
-  res.json({ activeUsers: Math.max(1, activeCount) });
+  res.json({ activeUsers: Math.max(1, sessions.size) });
 });
 
-app.listen(3000, () => {
-  console.log("http://localhost:3000");
-  if (!supabaseUrl || !supabaseKey) {
-    console.log("⚠️ PLEASE ADD YOUR SUPABASE CREDENTIALS TO A .env FILE TO SAVE LOCATIONS.");
-  }
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server listening on :${PORT}`);
 });
