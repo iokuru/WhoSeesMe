@@ -230,7 +230,11 @@ app.post("/api/heartbeat", (req, res) => {
   res.json({ activeUsers: Math.max(1, sessions.size) });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server listening on :${PORT}`);
-});
+export default app;
+
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server listening on :${PORT}`);
+  });
+}
