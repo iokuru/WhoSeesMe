@@ -2,13 +2,35 @@
 
 body {
   margin: 0;
-  background: #0b0b0b;
-  font-family: Arial, Helvetica, sans-serif;
+  background: #07080a;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #eaeaea;
   overflow: hidden;
+  letter-spacing: -0.2px;
 }
 
-/* ================= LEFT PANEL ================= */
+.scanline-laser {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #ffe600, #ffffff, #ffe600, transparent);
+  box-shadow: 0 0 15px #ffe600, 0 0 30px #ffe600;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.scanline-laser.active {
+  animation: scanlineSweep 1.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes scanlineSweep {
+  0% { top: 0; opacity: 1; }
+  80% { opacity: 0.9; }
+  100% { top: 100vh; opacity: 0; }
+}
 
 .left-panel {
   width: 300px;
@@ -72,14 +94,23 @@ body {
   width: 100%;
   padding: 12px;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, #2a0f14, #16090c);
+  background: linear-gradient(135deg, #220c10, #13070a);
   border: 1px solid #7a1c28;
   color: #fff;
-  border-radius: 10px;
+  clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
   cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
 }
 
-/* ================= PROFILES ================= */
+.primary-btn:hover {
+  border-color: #ff334b;
+  box-shadow: 0 0 12px rgba(255, 51, 75, 0.35);
+  transform: translateY(-1px);
+}
 
 .profiles {
   display: flex;
@@ -124,8 +155,6 @@ body {
 .profile.highlight {
   border-color: #2ddf72;
 }
-
-/* ================= MIDDLE PANEL ================= */
 
 .middle-wrapper {
   position: fixed;
@@ -234,8 +263,6 @@ body {
   cursor: pointer;
 }
 
-/* ================= RIGHT PANEL ================= */
-
 .right-panel {
   position: fixed;
   top: 0;
@@ -254,12 +281,184 @@ body {
   background: #000;
   color: #fff;
   font-weight: 800;
-  padding: 14px;
+  padding: 10px 14px;
   border-bottom: 3px solid #ffe600;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-/* ================= SECTION BOX ================= */
+.rescan-btn {
+  background: #ffe600;
+  color: #000;
+  border: 1px solid #ffe600;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 6px 12px;
+  clip-path: polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px);
+  cursor: pointer;
+  letter-spacing: 0.6px;
+  font-family: 'Space Grotesk', sans-serif;
+  transition: all 0.15s ease;
+}
+
+.rescan-btn:hover {
+  background: #fff;
+  border-color: #fff;
+  box-shadow: 0 0 10px rgba(255, 230, 0, 0.4);
+}
+
+.rescan-btn:active {
+  transform: scale(0.96);
+}
+
+.rescan-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.diff-card {
+  margin: 14px 16px 0;
+  padding: 12px 14px;
+  background: #0d0f14;
+  border: 1px solid #ffe600;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.diff-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 800;
+  color: #ffe600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.diff-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #222;
+  font-size: 12px;
+}
+
+.diff-delta-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.diff-delta-badge.neutral {
+  background: rgba(255, 230, 0, 0.15);
+  color: #ffe600;
+  border: 1px solid #ffe600;
+}
+
+.diff-delta-badge.improved {
+  background: rgba(45, 223, 114, 0.15);
+  color: #2ddf72;
+  border: 1px solid #2ddf72;
+}
+
+.diff-delta-badge.worsened {
+  background: rgba(255, 77, 77, 0.15);
+  color: #ff4d4d;
+  border: 1px solid #ff4d4d;
+}
+
+.diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diff-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.diff-item-key {
+  color: #888;
+}
+
+.diff-tag {
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.diff-tag.leaked {
+  background: rgba(255, 77, 77, 0.15);
+  color: #ff4d4d;
+  border: 1px solid #ff4d4d;
+}
+
+.diff-tag.changed {
+  background: rgba(45, 223, 114, 0.15);
+  color: #2ddf72;
+  border: 1px solid #2ddf72;
+}
+
+.diff-reset-btn {
+  background: transparent;
+  border: none;
+  color: #777;
+  font-size: 10px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.diff-reset-btn:hover {
+  color: #ffe600;
+}
+
+.kinematic-canvas-container {
+  margin: 10px 16px 14px;
+  background: #090b10;
+  border: 1px solid rgba(255, 230, 0, 0.3);
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kinematic-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kinematic-header span:last-child {
+  color: #ffe600;
+  font-weight: 700;
+}
+
+#kinematicCanvas {
+  width: 100%;
+  height: 52px;
+  display: block;
+  background: #06070a;
+  border: 1px solid #1a1d24;
+  border-radius: 3px;
+}
 
 .section {
   border: 2px solid #ffe600;
@@ -276,8 +475,6 @@ body {
   text-transform: uppercase;
   letter-spacing: 1px;
 }
-
-/* ================= ROWS ================= */
 
 .row {
   display: flex;
@@ -302,6 +499,9 @@ body {
 .row span:last-child {
   color: #ffe600;
   font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: -0.2px;
   text-align: right;
   max-width: 55%;
   overflow: hidden;
@@ -309,7 +509,20 @@ body {
   text-overflow: ellipsis;
 }
 
-/* ================= SCROLLBAR ================= */
+#trackabilityscore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+#uniquenessanalysis {
+  font-size: 11px;
+  color: #bbb;
+  cursor: help;
+  white-space: normal;
+  max-width: 65%;
+  line-height: 1.3;
+}
 
 .right-panel::-webkit-scrollbar {
   width: 6px;
