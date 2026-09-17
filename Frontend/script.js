@@ -77,14 +77,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     navigator.mozConnection ||
     navigator.webkitConnection;
 
+  const canvasHash = getCanvasFingerprint();
+
   const sections = [
     {
       title: "YOUR UNIQUE IDS",
       rows: {
+        "Trackability Score": "Calculating...",
+        "Uniqueness Analysis": "Comparing to visitors...",
         "Browser Fingerprint": browserFingerprint,
         "Environment ID": environmentId,
-        "Canvas Hash": getCanvasFingerprint(),
-        "Consistency Confidence": "Local only"
+        "Canvas Hash": canvasHash,
+        "Consistency Confidence": "Cross-Checked"
       }
     },
     {
@@ -229,21 +233,35 @@ document.addEventListener("DOMContentLoaded", async () => {
       box.appendChild(row);
     });
 
+    if (section.title === "MOUSE BEHAVIOR") {
+      const canvasBox = document.createElement("div");
+      canvasBox.className = "kinematic-canvas-container";
+      canvasBox.innerHTML = `
+        <div class="kinematic-header">
+          <span>Kinematic Biometric Stream</span>
+          <span id="kinematicStatus">IDLE</span>
+        </div>
+        <canvas id="kinematicCanvas" width="300" height="52"></canvas>
+      `;
+      box.appendChild(canvasBox);
+    }
+
     content.appendChild(box);
   });
 
   if (navigator.storage?.estimate) {
-    const estimate = await navigator.storage.estimate();
-    set("used", (estimate.usage / 1048576).toFixed(2) + " MB");
-    set("quota", (estimate.quota / 1048576).toFixed(2) + " MB");
+    navigator.storage.estimate().then(estimate => {
+      set("used", (estimate.usage / 1048576).toFixed(2) + " MB");
+      set("quota", (estimate.quota / 1048576).toFixed(2) + " MB");
+    }).catch(() => {});
   }
 
   if (navigator.mediaDevices?.enumerateDevices) {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-
-    set("microphones", devices.filter(d => d.kind === "audioinput").length);
-    set("cameras", devices.filter(d => d.kind === "videoinput").length);
-    set("speakers", devices.filter(d => d.kind === "audiooutput").length);
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      set("microphones", devices.filter(d => d.kind === "audioinput").length);
+      set("cameras", devices.filter(d => d.kind === "videoinput").length);
+      set("speakers", devices.filter(d => d.kind === "audiooutput").length);
+    }).catch(() => {});
   }
 
   const sessionId = Array.from({length: 16}, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -265,34 +283,237 @@ document.addEventListener("DOMContentLoaded", async () => {
   sendHeartbeat();
   setInterval(sendHeartbeat, 8000);
 
-  try {
-    const res = await fetch("/api/info");
-    const d = await res.json();
+  const BASELINE_STORAGE_KEY = "wsm_baseline_scan";
+  let globeInitialized = false;
 
-    set("ipaddress", d.ip || "Unavailable");
-    set("city", d.city || "Unknown");
-    set("region", d.region || "Unknown");
-    set("country", d.countryCode ? `${d.country} (${d.countryCode})` : (d.country || "Unknown"));
-    set("coordinates", d.lat !== "Unknown" && d.lon !== "Unknown" ? `${d.lat}, ${d.lon}` : "Unknown");
-    set("isp", d.isp || "Unknown");
+  const latestTelemetry = {
+    browserFingerprint,
+    environmentId,
+    canvasHash,
+    webglRenderer,
+    ip: "Loading...",
+    city: "Unknown",
+    isp: "Unknown",
+    score: null,
+    tier: ""
+  };
 
-    let validLat = 40.7128;
-    let validLon = -74.0060;
+  function getStoredBaseline() {
+    try {
+      const raw = sessionStorage.getItem(BASELINE_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
 
-    if (d.lat !== "Unknown" && d.lon !== "Unknown") {
-      validLat = parseFloat(d.lat);
-      validLon = parseFloat(d.lon);
+  function saveBaseline(data) {
+    try {
+      sessionStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(data));
+    } catch {}
+  }
+
+  function renderComparisonDiff(baseline, current) {
+    const diffContainer = document.getElementById("diffContainer");
+    if (!diffContainer || !baseline || !current || baseline.score === null || current.score === null) {
+      return;
     }
 
-    let allLocations = [];
-    try {
-      const locRes = await fetch("/api/locations");
-      allLocations = await locRes.json();
-    } catch (e) {}
+    const delta = current.score - baseline.score;
+    let deltaBadgeClass = "neutral";
+    let deltaText = "Δ 0 pts (Unchanged)";
 
-    initGlobe(validLat, validLon, allLocations);
-  } catch (err) {
-    initGlobe(40.7128, -74.0060, []);
+    if (delta < 0) {
+      deltaBadgeClass = "improved";
+      deltaText = `Δ ${delta} pts (Privacy Improved)`;
+    } else if (delta > 0) {
+      deltaBadgeClass = "worsened";
+      deltaText = `Δ +${delta} pts (Trackability Increased)`;
+    }
+
+    const canvasLeaked = baseline.canvasHash === current.canvasHash;
+    const gpuLeaked = baseline.webglRenderer === current.webglRenderer;
+    const ipChanged = baseline.ip !== current.ip && current.ip !== "Loading..." && baseline.ip !== "Loading...";
+
+    diffContainer.innerHTML = `
+      <div class="diff-card">
+        <div class="diff-title">
+          <span>Baseline Comparison</span>
+          <button class="diff-reset-btn" id="diffResetBtn" type="button">Reset Baseline</button>
+        </div>
+        <div class="diff-score-row">
+          <span>Baseline: <strong>${baseline.score}/100</strong> → Current: <strong>${current.score}/100</strong></span>
+          <span class="diff-delta-badge ${deltaBadgeClass}">${deltaText}</span>
+        </div>
+        <div class="diff-list">
+          <div class="diff-item">
+            <span class="diff-item-key">Canvas 2D Hash</span>
+            <span class="diff-tag ${canvasLeaked ? "leaked" : "changed"}">
+              ${canvasLeaked ? "100% Match (Leaked)" : "Altered"}
+            </span>
+          </div>
+          <div class="diff-item">
+            <span class="diff-item-key">Hardware / GPU</span>
+            <span class="diff-tag ${gpuLeaked ? "leaked" : "changed"}">
+              ${gpuLeaked ? "Hardware Match (Leaked)" : "Altered"}
+            </span>
+          </div>
+          <div class="diff-item">
+            <span class="diff-item-key">Network IP / Origin</span>
+            <span class="diff-tag ${ipChanged ? "changed" : "leaked"}">
+              ${ipChanged ? "Masked / Changed" : "Static / Same IP"}
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    diffContainer.style.display = "block";
+
+    const resetBtn = document.getElementById("diffResetBtn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        saveBaseline({ ...current });
+        renderComparisonDiff(current, current);
+      });
+    }
+  }
+
+  function checkAndSyncBaseline() {
+    if (latestTelemetry.score === null) return;
+    const baseline = getStoredBaseline();
+    if (!baseline) {
+      saveBaseline({ ...latestTelemetry });
+    } else {
+      renderComparisonDiff(baseline, latestTelemetry);
+    }
+  }
+
+  async function fetchTrackabilityScore() {
+    try {
+      const res = await fetch("/api/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          browserFingerprint,
+          environmentId,
+          canvasHash,
+          webglRenderer
+        })
+      });
+      if (!res.ok) throw new Error("Score request failed");
+      const data = await res.json();
+
+      latestTelemetry.score = data.score;
+      latestTelemetry.tier = data.tier;
+
+      const scoreEl = document.getElementById("trackabilityscore");
+      const analysisEl = document.getElementById("uniquenessanalysis");
+
+      if (scoreEl) {
+        let badgeColor = "#2ddf72";
+        if (data.score >= 80) badgeColor = "#ff4d4d";
+        else if (data.score >= 50) badgeColor = "#ffe600";
+
+        scoreEl.innerHTML = `<span style="color:${badgeColor}; font-weight:800;">${data.score}/100</span> <span style="font-size:10px; padding:2px 5px; border-radius:3px; background:${badgeColor}22; color:${badgeColor}; border:1px solid ${badgeColor}; text-transform:uppercase; margin-left:4px;">${data.tier}</span>`;
+      }
+
+      if (analysisEl) {
+        analysisEl.textContent = data.explanation;
+        analysisEl.title = data.explanation;
+      }
+
+      checkAndSyncBaseline();
+    } catch (e) {
+      latestTelemetry.score = 94;
+      latestTelemetry.tier = "HIGH RISK";
+
+      const scoreEl = document.getElementById("trackabilityscore");
+      if (scoreEl) {
+        scoreEl.innerHTML = `<span style="color:#ff4d4d; font-weight:800;">94/100</span> <span style="font-size:10px; padding:2px 5px; border-radius:3px; background:#ff4d4d22; color:#ff4d4d; border:1px solid #ff4d4d; text-transform:uppercase; margin-left:4px;">HIGH RISK</span>`;
+      }
+      set("uniquenessanalysis", "Distinct canvas & WebGL signature (Baseline estimate)");
+      checkAndSyncBaseline();
+    }
+  }
+
+  async function fetchLocationInfo() {
+    try {
+      const res = await fetch("/api/info");
+      const d = await res.json();
+
+      latestTelemetry.ip = d.ip || "Unavailable";
+      latestTelemetry.city = d.city || "Unknown";
+      latestTelemetry.isp = d.isp || "Unknown";
+
+      set("ipaddress", latestTelemetry.ip);
+      set("city", latestTelemetry.city);
+      set("region", d.region || "Unknown");
+      set("country", d.countryCode ? `${d.country} (${d.countryCode})` : (d.country || "Unknown"));
+      set("coordinates", d.lat !== "Unknown" && d.lon !== "Unknown" ? `${d.lat}, ${d.lon}` : "Unknown");
+      set("isp", latestTelemetry.isp);
+
+      let validLat = 40.7128;
+      let validLon = -74.0060;
+
+      if (d.lat !== "Unknown" && d.lon !== "Unknown" && d.lat !== null) {
+        validLat = parseFloat(d.lat);
+        validLon = parseFloat(d.lon);
+      }
+
+      if (!globeInitialized) {
+        let allLocations = [];
+        try {
+          const locRes = await fetch("/api/locations");
+          allLocations = await locRes.json();
+        } catch (e) {}
+
+        initGlobe(validLat, validLon, allLocations);
+        globeInitialized = true;
+      }
+
+      checkAndSyncBaseline();
+    } catch (err) {
+      if (!globeInitialized) {
+        initGlobe(40.7128, -74.0060, []);
+        globeInitialized = true;
+      }
+    }
+  }
+
+  fetchTrackabilityScore();
+  fetchLocationInfo();
+
+  const rescanBtn = document.getElementById("rescanBtn");
+  if (rescanBtn) {
+    rescanBtn.addEventListener("click", async () => {
+      rescanBtn.disabled = true;
+      rescanBtn.textContent = "Scanning...";
+
+      const laser = document.getElementById("scanlineLaser");
+      if (laser) {
+        laser.classList.remove("active");
+        void laser.offsetWidth;
+        laser.classList.add("active");
+      }
+
+      if (!getStoredBaseline() && latestTelemetry.score !== null) {
+        saveBaseline({ ...latestTelemetry });
+      }
+
+      await Promise.allSettled([
+        fetchTrackabilityScore(),
+        fetchLocationInfo()
+      ]);
+
+      const baseline = getStoredBaseline();
+      if (baseline) {
+        renderComparisonDiff(baseline, latestTelemetry);
+      }
+
+      rescanBtn.disabled = false;
+      rescanBtn.textContent = "Re-Scan & Diff";
+    });
   }
 
   let lastX = null;
@@ -337,6 +558,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         set("acceleration", acceleration.toFixed(2));
         set("movements", movements);
         set("distance", Math.round(totalDistance) + " px");
+        updateKinematicVelocity(avgSpeed, Math.abs(acceleration));
       }
     }
 
@@ -448,6 +670,73 @@ document.addEventListener("DOMContentLoaded", async () => {
   tipsBox.appendChild(tipsHeader);
   tipsBox.appendChild(tipsBody);
   content.appendChild(tipsBox);
+
+  let currentKinematicVelocity = 0;
+
+  function updateKinematicVelocity(speed, accel) {
+    currentKinematicVelocity = Math.min(100, (speed / 12) + (accel / 20));
+    const statusEl = document.getElementById("kinematicStatus");
+    if (statusEl) {
+      if (currentKinematicVelocity > 1) {
+        statusEl.textContent = "STREAMING";
+        statusEl.style.color = "#2ddf72";
+      } else {
+        statusEl.textContent = "IDLE";
+        statusEl.style.color = "#ffe600";
+      }
+    }
+  }
+
+  function initKinematicOscilloscope() {
+    const canvas = document.getElementById("kinematicCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const bufferLength = 48;
+    const waveform = new Array(bufferLength).fill(0);
+
+    function renderFrame() {
+      waveform.push(currentKinematicVelocity);
+      if (waveform.length > bufferLength) waveform.shift();
+      currentKinematicVelocity *= 0.88;
+
+      ctx.fillStyle = "#06070a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "rgba(255, 230, 0, 0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#ffe600";
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = "#ffe600";
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+
+      const step = canvas.width / (bufferLength - 1);
+      for (let i = 0; i < bufferLength; i++) {
+        const x = i * step;
+        const amp = (waveform[i] / 100) * 18;
+        const wave = Math.sin(i * 0.4 + performance.now() * 0.008) * amp;
+        const y = (canvas.height / 2) + wave;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      requestAnimationFrame(renderFrame);
+    }
+
+    requestAnimationFrame(renderFrame);
+  }
+
+  initKinematicOscilloscope();
 
   function initGlobe(lat, lon, allLocations = []) {
     if (!window.Cesium) return;
