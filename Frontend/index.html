@@ -5,6 +5,10 @@
   <title>WhoSeesMe</title>
   <meta name="description" content="Discover what information websites can collect about you. A privacy awareness tool showing your IP, location, device fingerprints, and more.">
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 
   <script src="https://unpkg.com/cesium@1.116.0/Build/Cesium/Cesium.js"></script>
@@ -12,6 +16,7 @@
 
 </head>
 <body>
+<div id="scanlineLaser" class="scanline-laser"></div>
 
 <div class="left-panel">
 
@@ -153,9 +158,11 @@
 <!-- RIGHT PANEL -->
 <div class="right-panel">
   <div class="right-header">
-    YOUR INFORMATION
+    <span>YOUR INFORMATION</span>
+    <button id="rescanBtn" class="rescan-btn" type="button">Re-Scan & Diff</button>
   </div>
 
+  <div id="diffContainer" style="display: none;"></div>
   <div id="content"></div>
 </div>
 
